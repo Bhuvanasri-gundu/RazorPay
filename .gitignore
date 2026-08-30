@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+dashboard/node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Next.js and build outputs
+.next/
+dashboard/.next/
+dist/
+build/
+out/
+.vercel/
+*.log
+.DS_Store
+Thumbs.db
+
+# Environment files — prevent any real secrets from being tracked
+.env
+.env.*
+.env.local
+.env.*.local
+*.env
+server/.env
+server/.env.local
+server/.env.*
+dashboard/.env
+dashboard/.env.local
+dashboard/.env.*
+
+# DO NOT ignore example templates
+!.env.example
+!.env.local.example
+!*.env.example
+!server/.env.example
+!dashboard/.env.example
