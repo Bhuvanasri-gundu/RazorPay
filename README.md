@@ -37,7 +37,6 @@ RazorPay/
 │   ├── migrations/            # SQL migration scripts
 │   └── seed.sql               # Base database schema & initialization
 │
-├── HACKATHON_DEMO_SCRIPT.md   # 2-minute pitch guide & judge presentation script
 ├── README.md                  # Project documentation
 └── .gitignore                 # Secure Git exclusion rules
 ```
@@ -139,8 +138,3 @@ RAZORPAY_MODE=test
 4. **Live Demo & Sandbox (`/demo`)**: 4 predefined scenario cards + interactive custom transaction sandbox with real-time 5-stage progress pipeline (`WAITING`, `PROCESSING`, `COMPLETED`, `BLOCKED`, `FAILED`).
 5. **Batch Simulation (`/simulation`)**: Direct head-to-head comparison demonstrating **REVA AI (18.2% recovery)** vs **Naive Baseline (6.1% recovery)** on 100 failed transactions, with one-click JSON report export.
 
----
-
-## 🏆 Presentation Script
-
-Check [HACKATHON_DEMO_SCRIPT.md](file:///e:/RazorPay/reva/HACKATHON_DEMO_SCRIPT.md) for a complete 2-minute pitch guide and judge Q&A preparation.
