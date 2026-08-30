@@ -1,0 +1,183 @@
+"""Gemini AI service — analyzes failed payments and recommends recovery actions."""
+
+import json
+import traceback
+from google import genai
+from app.config import get_settings
+from app.models.schemas import GeminiAnalysis
+from app.services.audit_service import log_event
+
+
+SYSTEM_PROMPT = """You are REVA, an AI Revenue Recovery Agent for a payments company.
+You analyze failed payment transactions and recommend the best recovery action.
+
+You MUST respond with ONLY valid JSON in this exact format:
+{
+  "diagnosis": "brief diagnosis of why the payment failed",
+  "confidence": "high" or "medium" or "low",
+  "recommended_action": one of "RETRY_LATER", "CREATE_PAYMENT_LINK", "RECOMMEND_ALTERNATIVE_METHOD", "STOP_RECOVERY", "ESCALATE",
+  "reason": "brief explainable reason for the recommendation",
+  "customer_message": "short personalized message to send to the customer"
+}
+
+Rules:
+- BANK_TIMEOUT or TECHNICAL_FAILURE with low retry count → usually RETRY_LATER
+- UPI_TIMEOUT with multiple failures → RECOMMEND_ALTERNATIVE_METHOD
+- CARD_DECLINED → depends on reason, often CREATE_PAYMENT_LINK or RECOMMEND_ALTERNATIVE_METHOD
+- INSUFFICIENT_BALANCE → usually STOP_RECOVERY or CREATE_PAYMENT_LINK with delay
+- High retry count (>=3) → STOP_RECOVERY or ESCALATE
+- Low customer success rate (<30%) → consider STOP_RECOVERY
+- High value (>50000) → be cautious, consider ESCALATE
+
+Respond with ONLY the JSON object. No markdown, no explanation, no code fences."""
+
+
+def build_user_prompt(
+    amount: float,
+    payment_method: str,
+    failure_reason: str,
+    retry_count: int,
+    customer_success_rate: float,
+    previous_failures: int = 0,
+    recovery_attempts: int = 0,
+) -> str:
+    return f"""Analyze this failed payment:
+
+Amount: ₹{amount:,.2f}
+Payment Method: {payment_method}
+Failure Reason: {failure_reason}
+Retry Count: {retry_count}
+Customer Success Rate: {customer_success_rate:.0%}
+Previous Failures: {previous_failures}
+Recovery Attempts: {recovery_attempts}
+
+Respond with ONLY a JSON object."""
+
+
+def analyze_payment(
+    case_id: str,
+    amount: float,
+    payment_method: str,
+    failure_reason: str,
+    retry_count: int,
+    customer_success_rate: float,
+    previous_failures: int = 0,
+    recovery_attempts: int = 0,
+) -> GeminiAnalysis:
+    """Call Gemini AI to analyze a failed payment. Returns validated GeminiAnalysis."""
+    settings = get_settings()
+
+    if not settings.is_gemini_active:
+        log_event(case_id, "Gemini AI", "MOCK_ANALYSIS", "[Mock AI Mode] Gemini API key not configured. Using deterministic AI diagnosis.")
+        return _fallback_analysis(failure_reason, retry_count, customer_success_rate)
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    user_prompt = build_user_prompt(
+        amount, payment_method, failure_reason, retry_count,
+        customer_success_rate, previous_failures, recovery_attempts
+    )
+
+    for attempt in range(2):  # Try twice
+        try:
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=f"{SYSTEM_PROMPT}\n\n{user_prompt}",
+                config=genai.types.GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=500,
+                ),
+            )
+            raw = response.text.strip()
+
+            # Clean possible markdown fences
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1]
+                if raw.endswith("```"):
+                    raw = raw[:-3]
+                raw = raw.strip()
+
+            parsed = json.loads(raw)
+            analysis = GeminiAnalysis(**parsed)
+
+            log_event(case_id, "Gemini AI", "ANALYSIS_COMPLETE",
+                      f"Diagnosis: {analysis.diagnosis}",
+                      {"confidence": analysis.confidence, "raw_response": raw})
+            return analysis
+
+        except json.JSONDecodeError as e:
+            log_event(case_id, "Gemini AI", "PARSE_ERROR",
+                      f"Invalid JSON from Gemini (attempt {attempt + 1}): {str(e)}",
+                      {"raw": raw if 'raw' in dir() else "N/A"})
+        except Exception as e:
+            log_event(case_id, "Gemini AI", "API_ERROR",
+                      f"Gemini API error (attempt {attempt + 1}): {str(e)}",
+                      {"traceback": traceback.format_exc()})
+
+    # Fallback after 2 failed attempts
+    log_event(case_id, "Gemini AI", "FALLBACK", "Using deterministic fallback after Gemini failure.")
+    return _fallback_analysis(failure_reason, retry_count, customer_success_rate)
+
+
+def _fallback_analysis(failure_reason: str, retry_count: int, success_rate: float) -> GeminiAnalysis:
+    """Deterministic fallback when Gemini is unavailable or returns bad data."""
+    if retry_count >= 3:
+        return GeminiAnalysis(
+            diagnosis=f"Multiple retries exhausted for {failure_reason}",
+            confidence="high",
+            recommended_action="STOP_RECOVERY",
+            reason="Maximum retry limit reached",
+            customer_message=None,
+        )
+
+    if success_rate < 0.3:
+        return GeminiAnalysis(
+            diagnosis=f"Low customer success rate with {failure_reason}",
+            confidence="medium",
+            recommended_action="STOP_RECOVERY",
+            reason="Customer has very low payment success history",
+            customer_message=None,
+        )
+
+    if failure_reason in ("BANK_TIMEOUT", "TECHNICAL_FAILURE"):
+        return GeminiAnalysis(
+            diagnosis=f"Temporary failure: {failure_reason}",
+            confidence="medium",
+            recommended_action="RETRY_LATER",
+            reason="Failure appears temporary, retry is safe",
+            customer_message="Your payment failed due to a temporary issue. We will retry shortly.",
+        )
+
+    if failure_reason == "UPI_TIMEOUT":
+        return GeminiAnalysis(
+            diagnosis="UPI service timeout",
+            confidence="medium",
+            recommended_action="RECOMMEND_ALTERNATIVE_METHOD",
+            reason="UPI appears unreliable, suggest alternative",
+            customer_message="UPI payment failed. Please try Card or Netbanking.",
+        )
+
+    if failure_reason == "CARD_DECLINED":
+        return GeminiAnalysis(
+            diagnosis="Card was declined by issuing bank",
+            confidence="medium",
+            recommended_action="CREATE_PAYMENT_LINK",
+            reason="Card declined — send payment link for alternative method",
+            customer_message="Your card payment was declined. Please use this payment link to complete your purchase.",
+        )
+
+    if failure_reason == "INSUFFICIENT_BALANCE":
+        return GeminiAnalysis(
+            diagnosis="Insufficient balance in customer account",
+            confidence="high",
+            recommended_action="STOP_RECOVERY",
+            reason="Customer lacks sufficient funds — further retries may cause friction",
+            customer_message=None,
+        )
+
+    return GeminiAnalysis(
+        diagnosis=f"Payment failed: {failure_reason}",
+        confidence="low",
+        recommended_action="ESCALATE",
+        reason="Unable to determine best recovery action",
+        customer_message=None,
+    )
