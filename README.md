@@ -76,6 +76,22 @@ AUDIT TRAIL LOGGED → DASHBOARD UPDATED
 
 ---
 
+## Screenshots
+
+### 1. Main Dashboard
+![REVA Dashboard](docs/screenshots/dashboard.png)
+
+### 2. Recovery Case Details & Policy Workflow
+![Recovery Case Details and Workflow](docs/screenshots/recovery-workflow.png)
+
+### 3. Live Demo — Autonomous AI Diagnosis & Policy Decision
+![Live Demo Execution](docs/screenshots/live-demo.png)
+
+### 4. Razorpay Test Mode Checkout Flow
+![Razorpay Test Checkout](docs/screenshots/razorpay-checkout.png)
+
+---
+
 ## 🚀 Quick Start (Zero Setup Required for Demo)
 
 The project includes an **automatic mock mode**. You can run and demo the full application immediately without any external API keys!
