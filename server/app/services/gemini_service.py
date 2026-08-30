@@ -77,19 +77,25 @@ def analyze_payment(
         customer_success_rate, previous_failures, recovery_attempts
     )
 
-    for attempt in range(2):  # Try twice
+    candidate_models = [settings.gemini_model]
+    for fallback_model in ["gemini-3.6-flash", "gemini-flash-latest"]:
+        if fallback_model not in candidate_models:
+            candidate_models.append(fallback_model)
+
+    for model_name in candidate_models:
         try:
             response = client.models.generate_content(
-                model=settings.gemini_model,
+                model=model_name,
                 contents=f"{SYSTEM_PROMPT}\n\n{user_prompt}",
                 config=genai.types.GenerateContentConfig(
                     temperature=0.2,
-                    max_output_tokens=500,
+                    max_output_tokens=2048,
+                    response_mime_type="application/json",
                 ),
             )
             raw = response.text.strip()
 
-            # Clean possible markdown fences
+            # Clean possible markdown fences if returned
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[-1]
                 if raw.endswith("```"):
@@ -97,20 +103,54 @@ def analyze_payment(
                 raw = raw.strip()
 
             parsed = json.loads(raw)
+
+            # Robust confidence normalization
+            conf = parsed.get("confidence", "high")
+            if isinstance(conf, (int, float)):
+                conf = "high" if conf >= 0.7 else ("medium" if conf >= 0.4 else "low")
+            elif isinstance(conf, str):
+                conf_str = conf.strip().lower()
+                conf = "high" if "high" in conf_str else ("low" if "low" in conf_str else "medium")
+            else:
+                conf = "high"
+            parsed["confidence"] = conf
+
+            # Robust recommended_action normalization
+            action = str(parsed.get("recommended_action", "")).strip().upper()
+            valid_actions = {
+                "RETRY_LATER",
+                "CREATE_PAYMENT_LINK",
+                "RECOMMEND_ALTERNATIVE_METHOD",
+                "STOP_RECOVERY",
+                "ESCALATE",
+            }
+            if action not in valid_actions:
+                if "ALTERNATIVE" in action or "METHOD" in action:
+                    action = "RECOMMEND_ALTERNATIVE_METHOD"
+                elif "LINK" in action:
+                    action = "CREATE_PAYMENT_LINK"
+                elif "RETRY" in action:
+                    action = "RETRY_LATER"
+                elif "STOP" in action:
+                    action = "STOP_RECOVERY"
+                else:
+                    action = "RECOMMEND_ALTERNATIVE_METHOD"
+            parsed["recommended_action"] = action
+
             analysis = GeminiAnalysis(**parsed)
 
             log_event(case_id, "Gemini AI", "ANALYSIS_COMPLETE",
                       f"Diagnosis: {analysis.diagnosis}",
-                      {"confidence": analysis.confidence, "raw_response": raw})
+                      {"confidence": analysis.confidence, "model": model_name, "raw_response": raw})
             return analysis
 
         except json.JSONDecodeError as e:
             log_event(case_id, "Gemini AI", "PARSE_ERROR",
-                      f"Invalid JSON from Gemini (attempt {attempt + 1}): {str(e)}",
+                      f"Invalid JSON from Gemini ({model_name}): {str(e)}",
                       {"raw": raw if 'raw' in dir() else "N/A"})
         except Exception as e:
             log_event(case_id, "Gemini AI", "API_ERROR",
-                      f"Gemini API error (attempt {attempt + 1}): {str(e)}",
+                      f"Gemini API error ({model_name}): {str(e)}",
                       {"traceback": traceback.format_exc()})
 
     # Fallback after 2 failed attempts
