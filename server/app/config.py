@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         url = self.supabase_url.strip()
         key = self.supabase_service_role_key.strip()
         url_valid = bool(url and url.startswith("https://") and "your-project" not in url.lower())
-        key_valid = bool(key and not key.startswith("your_") and not key.startswith("YOUR_") and len(key) > 20)
+        key_valid = bool(key and key.startswith("eyJ") and not key.startswith("your_") and not key.startswith("YOUR_") and len(key) > 20)
         if self.database_mode in ("real", "supabase"):
             return url_valid and key_valid
         # Auto mode

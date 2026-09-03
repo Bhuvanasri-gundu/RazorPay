@@ -348,6 +348,7 @@ def run_demo_scenario(req: DemoScenarioRequest):
     return _execute_scenario_flow(scenario, req.scenario)
 
 
+@router.post("/api/demo/run-custom")
 @router.post("/api/demo/run-custom-scenario")
 def run_custom_scenario(req: CustomScenarioRequest):
     """Run an interactive custom scenario with user-defined parameters."""

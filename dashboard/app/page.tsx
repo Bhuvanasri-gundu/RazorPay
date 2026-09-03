@@ -244,10 +244,18 @@ export default function DashboardPage() {
 
         <ChartCard title="Cases by Status">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={analytics?.cases_by_status || []} layout="vertical" margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
+            <BarChart data={analytics?.cases_by_status || []} layout="vertical" margin={{ top: 10, right: 30, left: 15, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
               <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis dataKey="status" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis 
+                dataKey="status" 
+                type="category" 
+                stroke="hsl(var(--muted-foreground))" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false}
+                width={210}
+              />
               <Tooltip 
                 cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
                 contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
