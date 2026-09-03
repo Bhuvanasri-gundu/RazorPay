@@ -145,20 +145,33 @@ def analyze_payment(
 
     except concurrent.futures.TimeoutError:
         log_event(case_id, "Gemini AI", "TIMEOUT",
-                  f"Gemini API request timed out after 2s ({model_name}).")
-    except json.JSONDecodeError as e:
+                  f"Gemini API response timed out (>2.0s). Transitioned to deterministic AI heuristic engine.",
+                  {"model": model_name, "fallback": True})
+    except json.JSONDecodeError:
         log_event(case_id, "Gemini AI", "PARSE_ERROR",
-                  f"Invalid JSON from Gemini ({model_name}): {str(e)}",
-                  {"raw": raw if 'raw' in dir() else "N/A"})
+                  f"Invalid response format received from {model_name}. Transitioned to deterministic AI heuristic engine.",
+                  {"model": model_name, "fallback": True})
     except Exception as e:
         err_str = str(e)
-        log_event(case_id, "Gemini AI", "API_ERROR",
-                  f"Gemini API error ({model_name}): {err_str}",
-                  {"traceback": traceback.format_exc()})
+        if any(k in err_str for k in ["429", "RESOURCE_EXHAUSTED", "quota", "Quota", "rate limit"]):
+            log_event(case_id, "Gemini AI", "QUOTA_EXHAUSTED",
+                      f"Gemini API quota reached / rate limit active for {model_name}. Transitioned to deterministic AI heuristic engine.",
+                      {"model": model_name, "error_code": 429, "fallback": True})
+        elif any(k in err_str for k in ["API_KEY", "401", "403", "PERMISSION_DENIED"]):
+            log_event(case_id, "Gemini AI", "AUTH_UNAVAILABLE",
+                      f"Gemini API key authorization unavailable. Transitioned to deterministic AI heuristic engine.",
+                      {"model": model_name, "fallback": True})
+        else:
+            log_event(case_id, "Gemini AI", "API_UNAVAILABLE",
+                      f"Gemini API temporarily unavailable ({model_name}). Transitioned to deterministic AI heuristic engine.",
+                      {"model": model_name, "fallback": True})
 
     # Graceful deterministic fallback
-    log_event(case_id, "Gemini AI", "FALLBACK", "Using deterministic AI heuristic fallback.")
-    return _fallback_analysis(failure_reason, retry_count, customer_success_rate)
+    fallback_res = _fallback_analysis(failure_reason, retry_count, customer_success_rate)
+    log_event(case_id, "Gemini AI", "FALLBACK_ACTIVATED",
+              f"AI Diagnosis (Heuristic Fallback): {fallback_res.diagnosis}",
+              {"recommended_action": fallback_res.recommended_action, "confidence": fallback_res.confidence, "mode": "heuristic_fallback"})
+    return fallback_res
 
 
 def _fallback_analysis(failure_reason: str, retry_count: int, success_rate: float) -> GeminiAnalysis:

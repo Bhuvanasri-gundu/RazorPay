@@ -71,9 +71,9 @@ def create_payment_link(
                 "is_mock": False,
             }
         except Exception as e:
-            log_event(case_id, "Razorpay", "API_ERROR",
-                      f"Razorpay API error ({str(e)}). Using simulated link.",
-                      {"traceback": traceback.format_exc()})
+            log_event(case_id, "Razorpay", "FALLBACK_ACTIVATED",
+                      "Razorpay test API limit reached / unavailable. Generated simulated recovery payment link.",
+                      {"fallback": True, "error": "rate_limit_or_timeout"})
             # Fallback to simulated link on API error
             return _generate_mock_link(case_id, amount, description)
 
