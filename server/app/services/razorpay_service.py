@@ -82,15 +82,15 @@ def create_payment_link(
 
 
 def _generate_mock_link(case_id: str, amount: float, description: str) -> dict:
-    """Generate clearly labeled simulated test payment link."""
+    """Generate interactive test payment recovery checkout link."""
     link_id = f"plink_mock_{uuid.uuid4().hex[:12]}"
-    short_url = f"https://rzp.io/i/mock_reva_{uuid.uuid4().hex[:8]}"
+    short_url = f"http://localhost:3000/checkout?case_id={case_id}&amount={amount}&link_id={link_id}"
 
     log_event(
         case_id,
         "Razorpay",
         "MOCK_LINK_CREATED",
-        f"[Mock Mode] Simulated payment link generated: {short_url}",
+        f"[Test Mode] Interactive recovery payment link generated: {short_url}",
         {"payment_link_id": link_id, "amount": amount, "is_mock": True},
     )
 
