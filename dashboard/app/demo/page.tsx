@@ -120,25 +120,35 @@ export default function DemoPage() {
     setError(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
       const res = await fetch(`${API_BASE}/api/demo/run-scenario`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ scenario: id }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
-        throw new Error("Failed to run scenario");
+        throw new Error(`Server returned HTTP ${res.status}`);
       }
 
       const data: RunScenarioResponse = await res.json();
-      setAllSteps(data.steps);
-      setCaseId(data.case_id);
-      setFinalStatus(data.final_status);
-    } catch (err) {
-      console.error(err);
-      setError("An error occurred while running the scenario.");
+      if (data.steps && data.steps.length > 0) {
+        setAllSteps(data.steps);
+        setDisplayedSteps([data.steps[0]]);
+        setCaseId(data.case_id);
+        setFinalStatus(data.final_status || "COMPLETED");
+      } else {
+        throw new Error(data.error || "No execution steps returned");
+      }
+    } catch (err: any) {
+      console.error("Scenario execution error:", err);
+      setError(err?.name === "AbortError" ? "Request timed out. Please retry." : (err?.message || "An error occurred while running the scenario."));
       setIsRunning(false);
     }
   };
@@ -153,6 +163,9 @@ export default function DemoPage() {
     setError(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
       const res = await fetch(`${API_BASE}/api/demo/run-custom-scenario`, {
         method: "POST",
         headers: {
@@ -166,19 +179,26 @@ export default function DemoPage() {
           retry_count: Number(customRetries),
           customer_name: customName || "Custom Demo",
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
-        throw new Error("Failed to run custom scenario");
+        throw new Error(`Server returned HTTP ${res.status}`);
       }
 
       const data: RunScenarioResponse = await res.json();
-      setAllSteps(data.steps);
-      setCaseId(data.case_id);
-      setFinalStatus(data.final_status);
-    } catch (err) {
-      console.error(err);
-      setError("An error occurred while running custom scenario.");
+      if (data.steps && data.steps.length > 0) {
+        setAllSteps(data.steps);
+        setDisplayedSteps([data.steps[0]]);
+        setCaseId(data.case_id);
+        setFinalStatus(data.final_status || "COMPLETED");
+      } else {
+        throw new Error(data.error || "No execution steps returned");
+      }
+    } catch (err: any) {
+      console.error("Custom scenario error:", err);
+      setError(err?.name === "AbortError" ? "Request timed out. Please retry." : (err?.message || "An error occurred while running custom scenario."));
       setIsRunning(false);
     }
   };
@@ -187,9 +207,9 @@ export default function DemoPage() {
     if (allSteps.length > 0 && displayedSteps.length < allSteps.length) {
       const timer = setTimeout(() => {
         setDisplayedSteps((prev) => [...prev, allSteps[prev.length]]);
-      }, 700);
+      }, 250);
       return () => clearTimeout(timer);
-    } else if (allSteps.length > 0 && displayedSteps.length === allSteps.length) {
+    } else if (allSteps.length > 0 && displayedSteps.length >= allSteps.length) {
       setIsRunning(false);
     }
   }, [allSteps, displayedSteps]);
@@ -204,33 +224,53 @@ export default function DemoPage() {
 
     // 1. Detection
     let detection: StageStatus = "WAITING";
-    if (stepNames.includes("CASE_CREATED")) detection = "COMPLETED";
-    else if (stepNames.includes("INIT") || stepNames.includes("PAYMENT_FAILED")) detection = "PROCESSING";
+    if (stepNames.includes("CASE_CREATED") || stepNames.includes("AI_ANALYZING") || stepNames.includes("AI_COMPLETE")) {
+      detection = "COMPLETED";
+    } else if (stepNames.includes("INIT") || stepNames.includes("CUSTOMER_FOUND") || stepNames.includes("PAYMENT_FAILED") || isRunning) {
+      detection = "PROCESSING";
+    }
 
     // 2. Gemini AI
     let ai: StageStatus = "WAITING";
-    if (stepNames.includes("AI_COMPLETE")) ai = "COMPLETED";
-    else if (stepNames.includes("AI_ANALYZING")) ai = "PROCESSING";
+    if (stepNames.includes("AI_COMPLETE") || stepNames.includes("POLICY_CHECK") || stepNames.includes("POLICY_APPROVED") || stepNames.includes("ALTERNATIVE") || stepNames.includes("RECOVERED")) {
+      ai = "COMPLETED";
+    } else if (stepNames.includes("AI_ANALYZING") || stepNames.includes("CASE_CREATED")) {
+      ai = "PROCESSING";
+    }
 
     // 3. Policy Engine
     let policy: StageStatus = "WAITING";
-    if (stepNames.includes("POLICY_BLOCKED") || stepNames.includes("REQUIRES_APPROVAL")) policy = "BLOCKED";
-    else if (stepNames.includes("POLICY_APPROVED")) policy = "COMPLETED";
-    else if (stepNames.includes("POLICY_CHECK")) policy = "PROCESSING";
+    if (stepNames.includes("POLICY_BLOCKED") || stepNames.includes("REQUIRES_APPROVAL")) {
+      policy = "BLOCKED";
+    } else if (stepNames.includes("POLICY_APPROVED") || stepNames.includes("ACTION_EXECUTED") || stepNames.includes("RECOVERED") || stepNames.includes("ALTERNATIVE") || stepNames.includes("STOPPED")) {
+      policy = "COMPLETED";
+    } else if (stepNames.includes("POLICY_CHECK") || stepNames.includes("AI_COMPLETE")) {
+      policy = "PROCESSING";
+    }
 
     // 4. Action Execution
     let execution: StageStatus = "WAITING";
-    if (stepNames.includes("POLICY_BLOCKED") || stepNames.includes("REQUIRES_APPROVAL")) execution = "BLOCKED";
-    else if (stepNames.includes("RECOVERED") || stepNames.includes("PAYMENT_LINK") || stepNames.includes("ALTERNATIVE") || stepNames.includes("STOPPED")) execution = "COMPLETED";
-    else if (stepNames.includes("RECOVERY_FAILED")) execution = "FAILED";
-    else if (stepNames.includes("ACTION_EXECUTED") || stepNames.includes("POLICY_APPROVED")) execution = "PROCESSING";
+    if (stepNames.includes("POLICY_BLOCKED") || stepNames.includes("REQUIRES_APPROVAL")) {
+      execution = "BLOCKED";
+    } else if (stepNames.includes("RECOVERED") || stepNames.includes("PAYMENT_LINK") || stepNames.includes("ALTERNATIVE") || stepNames.includes("STOPPED")) {
+      execution = "COMPLETED";
+    } else if (stepNames.includes("RECOVERY_FAILED")) {
+      execution = "FAILED";
+    } else if (stepNames.includes("ACTION_EXECUTED") || stepNames.includes("POLICY_APPROVED")) {
+      execution = "PROCESSING";
+    }
 
     // 5. Result
     let result: StageStatus = "WAITING";
-    if (stepNames.includes("POLICY_BLOCKED") || stepNames.includes("REQUIRES_APPROVAL")) result = "BLOCKED";
-    else if (stepNames.includes("RECOVERED") || stepNames.includes("PAYMENT_LINK") || stepNames.includes("ALTERNATIVE") || stepNames.includes("STOPPED")) result = "COMPLETED";
-    else if (stepNames.includes("RECOVERY_FAILED")) result = "FAILED";
-    else if (stepNames.includes("ACTION_EXECUTED")) result = "PROCESSING";
+    if (stepNames.includes("POLICY_BLOCKED") || stepNames.includes("REQUIRES_APPROVAL")) {
+      result = "BLOCKED";
+    } else if (stepNames.includes("RECOVERED") || stepNames.includes("PAYMENT_LINK") || stepNames.includes("ALTERNATIVE") || stepNames.includes("STOPPED")) {
+      result = "COMPLETED";
+    } else if (stepNames.includes("RECOVERY_FAILED")) {
+      result = "FAILED";
+    } else if (stepNames.includes("ACTION_EXECUTED")) {
+      result = "PROCESSING";
+    }
 
     return { detection, ai, policy, execution, result };
   };
@@ -347,6 +387,8 @@ export default function DemoPage() {
                   {s.expectedOutcome}
                 </span>
                 <button
+                  id={`run-scenario-btn-${s.id}`}
+                  data-testid={`run-scenario-btn-${s.id}`}
                   onClick={() => runScenario(s.id)}
                   disabled={isRunning}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 shadow-md shadow-indigo-500/20"

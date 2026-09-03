@@ -2,6 +2,7 @@
 
 import json
 import traceback
+import concurrent.futures
 from google import genai
 from app.config import get_settings
 from app.models.schemas import GeminiAnalysis
@@ -77,14 +78,11 @@ def analyze_payment(
         customer_success_rate, previous_failures, recovery_attempts
     )
 
-    candidate_models = [settings.gemini_model]
-    for fallback_model in ["gemini-3.6-flash", "gemini-flash-latest"]:
-        if fallback_model not in candidate_models:
-            candidate_models.append(fallback_model)
-
-    for model_name in candidate_models:
-        try:
-            response = client.models.generate_content(
+    model_name = settings.gemini_model
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                client.models.generate_content,
                 model=model_name,
                 contents=f"{SYSTEM_PROMPT}\n\n{user_prompt}",
                 config=genai.types.GenerateContentConfig(
@@ -93,68 +91,73 @@ def analyze_payment(
                     response_mime_type="application/json",
                 ),
             )
-            raw = response.text.strip()
+            response = future.result(timeout=2.0)
+        raw = response.text.strip()
 
-            # Clean possible markdown fences if returned
-            if raw.startswith("```"):
-                raw = raw.split("\n", 1)[-1]
-                if raw.endswith("```"):
-                    raw = raw[:-3]
-                raw = raw.strip()
+        # Clean possible markdown fences if returned
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
 
-            parsed = json.loads(raw)
+        parsed = json.loads(raw)
 
-            # Robust confidence normalization
-            conf = parsed.get("confidence", "high")
-            if isinstance(conf, (int, float)):
-                conf = "high" if conf >= 0.7 else ("medium" if conf >= 0.4 else "low")
-            elif isinstance(conf, str):
-                conf_str = conf.strip().lower()
-                conf = "high" if "high" in conf_str else ("low" if "low" in conf_str else "medium")
+        # Robust confidence normalization
+        conf = parsed.get("confidence", "high")
+        if isinstance(conf, (int, float)):
+            conf = "high" if conf >= 0.7 else ("medium" if conf >= 0.4 else "low")
+        elif isinstance(conf, str):
+            conf_str = conf.strip().lower()
+            conf = "high" if "high" in conf_str else ("low" if "low" in conf_str else "medium")
+        else:
+            conf = "high"
+        parsed["confidence"] = conf
+
+        # Robust recommended_action normalization
+        action = str(parsed.get("recommended_action", "")).strip().upper()
+        valid_actions = {
+            "RETRY_LATER",
+            "CREATE_PAYMENT_LINK",
+            "RECOMMEND_ALTERNATIVE_METHOD",
+            "STOP_RECOVERY",
+            "ESCALATE",
+        }
+        if action not in valid_actions:
+            if "ALTERNATIVE" in action or "METHOD" in action:
+                action = "RECOMMEND_ALTERNATIVE_METHOD"
+            elif "LINK" in action:
+                action = "CREATE_PAYMENT_LINK"
+            elif "RETRY" in action:
+                action = "RETRY_LATER"
+            elif "STOP" in action:
+                action = "STOP_RECOVERY"
             else:
-                conf = "high"
-            parsed["confidence"] = conf
+                action = "RECOMMEND_ALTERNATIVE_METHOD"
+        parsed["recommended_action"] = action
 
-            # Robust recommended_action normalization
-            action = str(parsed.get("recommended_action", "")).strip().upper()
-            valid_actions = {
-                "RETRY_LATER",
-                "CREATE_PAYMENT_LINK",
-                "RECOMMEND_ALTERNATIVE_METHOD",
-                "STOP_RECOVERY",
-                "ESCALATE",
-            }
-            if action not in valid_actions:
-                if "ALTERNATIVE" in action or "METHOD" in action:
-                    action = "RECOMMEND_ALTERNATIVE_METHOD"
-                elif "LINK" in action:
-                    action = "CREATE_PAYMENT_LINK"
-                elif "RETRY" in action:
-                    action = "RETRY_LATER"
-                elif "STOP" in action:
-                    action = "STOP_RECOVERY"
-                else:
-                    action = "RECOMMEND_ALTERNATIVE_METHOD"
-            parsed["recommended_action"] = action
+        analysis = GeminiAnalysis(**parsed)
 
-            analysis = GeminiAnalysis(**parsed)
+        log_event(case_id, "Gemini AI", "ANALYSIS_COMPLETE",
+                  f"Diagnosis: {analysis.diagnosis}",
+                  {"confidence": analysis.confidence, "model": model_name, "raw_response": raw})
+        return analysis
 
-            log_event(case_id, "Gemini AI", "ANALYSIS_COMPLETE",
-                      f"Diagnosis: {analysis.diagnosis}",
-                      {"confidence": analysis.confidence, "model": model_name, "raw_response": raw})
-            return analysis
+    except concurrent.futures.TimeoutError:
+        log_event(case_id, "Gemini AI", "TIMEOUT",
+                  f"Gemini API request timed out after 2s ({model_name}).")
+    except json.JSONDecodeError as e:
+        log_event(case_id, "Gemini AI", "PARSE_ERROR",
+                  f"Invalid JSON from Gemini ({model_name}): {str(e)}",
+                  {"raw": raw if 'raw' in dir() else "N/A"})
+    except Exception as e:
+        err_str = str(e)
+        log_event(case_id, "Gemini AI", "API_ERROR",
+                  f"Gemini API error ({model_name}): {err_str}",
+                  {"traceback": traceback.format_exc()})
 
-        except json.JSONDecodeError as e:
-            log_event(case_id, "Gemini AI", "PARSE_ERROR",
-                      f"Invalid JSON from Gemini ({model_name}): {str(e)}",
-                      {"raw": raw if 'raw' in dir() else "N/A"})
-        except Exception as e:
-            log_event(case_id, "Gemini AI", "API_ERROR",
-                      f"Gemini API error ({model_name}): {str(e)}",
-                      {"traceback": traceback.format_exc()})
-
-    # Fallback after 2 failed attempts
-    log_event(case_id, "Gemini AI", "FALLBACK", "Using deterministic fallback after Gemini failure.")
+    # Graceful deterministic fallback
+    log_event(case_id, "Gemini AI", "FALLBACK", "Using deterministic AI heuristic fallback.")
     return _fallback_analysis(failure_reason, retry_count, customer_success_rate)
 
 

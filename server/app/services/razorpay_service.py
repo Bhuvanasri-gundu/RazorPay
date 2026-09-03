@@ -3,6 +3,7 @@
 import uuid
 import traceback
 import logging
+import concurrent.futures
 from app.config import get_settings
 from app.services.audit_service import log_event
 
@@ -42,7 +43,8 @@ def create_payment_link(
                     "email": customer_email,
                 },
                 "notify": {
-                    "email": True,
+                    "email": False,
+                    "sms": False,
                 },
                 "callback_url": "",
                 "callback_method": "get",
@@ -52,7 +54,9 @@ def create_payment_link(
                 },
             }
 
-            result = client.payment_link.create(payload)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(client.payment_link.create, payload)
+                result = future.result(timeout=2.0)
 
             log_event(case_id, "Razorpay", "PAYMENT_LINK_CREATED",
                       f"Razorpay payment link created: {result.get('short_url', 'N/A')}",
