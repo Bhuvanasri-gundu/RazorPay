@@ -6,22 +6,37 @@ REVA is an autonomous revenue recovery agent designed to recover lost revenue fr
 
 ---
 
-## Overview
+## Problem
 
 Digital businesses lose substantial revenue to payment failures caused by bank gateway timeouts, PSP network glitches, customer card declines, and transient UPI errors. Traditional payment gateways and merchants either leave these dropped payments unaddressed or rely on blunt, automated retry mechanisms that repeatedly hit exhausted accounts, resulting in customer churn and payment processing penalties.
 
-REVA solves this by introducing an intelligent, bounded recovery workflow:
-- Real-time detection of failed transactions and revenue at risk.
-- Root-cause diagnosis using Google Gemini AI, incorporating customer payment history and failure telemetry.
-- Deterministic policy enforcement to prevent unauthorized retries, spamming, and uncontrolled financial transactions.
-- Automated execution of tailored recovery strategies, including time-delayed retries, alternative payment channel recommendations, and dynamic Razorpay payment links.
-- Full auditability with immutable event logging for compliance and monitoring.
+---
+
+## Solution
+
+REVA solves payment friction by introducing an intelligent, bounded recovery workflow:
+- **Real-time detection** of failed transactions and revenue at risk.
+- **Root-cause diagnosis** using Google Gemini 3.6 Flash, incorporating customer payment history and failure telemetry.
+- **Deterministic policy enforcement** to prevent unauthorized retries, spamming, and uncontrolled financial transactions.
+- **Automated execution** of tailored recovery strategies, including time-delayed retries, alternative payment channel recommendations, and dynamic Razorpay payment links.
+- **Full auditability** with immutable event logging for compliance and monitoring.
 
 ---
 
-## How It Works
+## Key Features
 
-The core recovery lifecycle follows a strict sequence:
+- **Autonomous Root-Cause Diagnosis**: Evaluates complex payment failures (such as PSP timeouts, insufficient balances, and issuer declines) with explainable reasoning powered by Gemini 3.6 Flash.
+- **Deterministic Policy Engine**: Enforces rigid fintech compliance boundaries, ensuring AI recommendations adhere to retry limits and approval thresholds.
+- **Dynamic Razorpay Integration**: Automatically generates live Razorpay payment links for high-friction failures (such as repeated UPI drops), providing customers an instant checkout alternative.
+- **End-to-End Auditability**: Records every state transition, policy evaluation, and recovery action with millisecond timestamps and metadata.
+- **Interactive Sandbox and Demo**: Includes four predefined recovery scenarios and a custom transaction simulator to test arbitrary amounts, payment channels, and failure codes.
+- **Batch Simulation Engine**: Processes batches of 100 failed transactions to benchmark REVA recovery rates against naive retry mechanisms, with downloadable JSON reports.
+
+---
+
+## Architecture & Workflow
+
+### Recovery Lifecycle Sequence
 
 ```
 FAILED PAYMENT
@@ -39,72 +54,14 @@ AUDIT TRAIL
 DASHBOARD UPDATE
 ```
 
-1. **Revenue Risk Detection**: The system captures failed transaction webhooks or simulated events, records the amount at risk, and initiates a recovery case.
-2. **AI Diagnosis**: Google Gemini 3.6 Flash evaluates the transaction attributes (payment method, failure reason code, retry history, and customer success profile) and recommends a targeted recovery action.
-3. **Policy Validation**: The deterministic policy engine evaluates the recommendation against hard-coded business rules (such as retry limits and transaction value thresholds).
-4. **Recovery Action**: If approved, the action is executed (for example, generating a Razorpay payment link or scheduling a smart retry). If blocked or flagged for review, human approval is requested.
-5. **Audit Trail**: Every diagnosis, policy rule evaluation, and action execution is recorded in an append-only audit trail with component timestamps.
-6. **Dashboard Update**: Real-time recovery analytics, timeline trends, and case statuses are immediately reflected across the merchant interface.
+1. **Revenue Risk Detection**: Captures failed transaction webhooks or simulated events, records the amount at risk, and initiates a recovery case.
+2. **AI Diagnosis**: Google Gemini 3.6 Flash evaluates transaction attributes (payment method, failure reason code, retry history, customer success profile) and recommends a targeted recovery action.
+3. **Policy Validation**: The deterministic policy engine evaluates the recommendation against hard-coded business rules.
+4. **Recovery Action**: If approved, the action is executed (generating a Razorpay payment link or scheduling a smart retry).
+5. **Audit Trail**: Preserves diagnosis, policy rule evaluations, and action execution details in an append-only audit trail.
+6. **Dashboard Update**: Real-time recovery analytics and timeline trends immediately reflect on the merchant interface.
 
----
-
-## Safety Principle
-
-In financial technology systems, probabilistic artificial intelligence models must not operate unconstrained. REVA enforces a strict division of responsibility:
-
-- **AI proposes**: Google Gemini acts exclusively as a diagnostician, assessing error codes, past transaction success rates, and optimal retry paths.
-- **Policy disposes**: The deterministic policy engine acts as the governing authority, strictly evaluating every proposed action against predefined rules.
-
-### Key Guardrails
-- **Retry Ceiling**: Maximum of 3 retry attempts per transaction. Any further attempt is automatically terminated to prevent card network penalties.
-- **High-Value Threshold**: Any transaction equal to or exceeding INR 50,000 mandates explicit human approval (`REQUIRES_HUMAN_APPROVAL`) before any recovery action is initiated.
-- **Customer Contact Limits**: Direct notifications and alternative payment links are strictly capped to prevent customer harassment.
-- **Non-Recoverable Drops**: Transactions with final decline codes (such as invalid credentials or fraudulent indications) are stopped immediately without retry.
-
-No money-related recovery action is executed without deterministic policy approval.
-
----
-
-## Application Screenshots
-
-### Recovery Dashboard
-![REVA Dashboard](docs/screenshots/dashboard.png)
-The main executive dashboard provides real-time visibility into revenue at risk, recovered revenue, active recovery cases, policy blocks, daily recovery timelines, and failure distributions across card, UPI, and netbanking methods.
-
-### Recovery Case Workflow
-![Recovery Case Details and Workflow](docs/screenshots/recovery-workflow.png)
-The case details view displays the six-stage progression pipeline (`DETECTED → ANALYZED → DECISION → POLICY → ACTION → RESULT`), customer risk profiles, AI root-cause diagnosis, action execution status, and a chronological audit log.
-
-### AI Diagnosis and Policy Decision
-![Live Demo Execution](docs/screenshots/live-demo.png)
-The interactive demo engine demonstrates live transaction execution, highlighting real-time stage transitions, Gemini AI diagnostic reasoning, policy engine validation, and dynamic payment link dispatch.
-
-### Razorpay Recovery Flow
-![Razorpay Test Checkout](docs/screenshots/razorpay-checkout.png)
-Dynamic payment links generated by REVA direct customers to the official Razorpay test checkout interface, enabling customers to complete dropped orders via alternative payment methods.
-
-### Razorpay Test Gateway
-![Razorpay Test Gateway](docs/screenshots/razorpay-test-gateway.png)
-REVA's integrated recovery checkout portal presents customers with a secure, branded payment page offering Credit/Debit, Netbanking, and UPI payment alternatives. The portal connects directly to the Razorpay Test Gateway for sandbox payment processing.
-
-### Razorpay Test Checkout Modal
-![Razorpay Test Checkout Modal](docs/screenshots/razorpay-test-checkout.png)
-When a customer opens a REVA recovery payment link, the integrated Razorpay Standard Checkout modal launches in test mode with prefilled contact details, offering card, netbanking, and UPI payment options for completing the recovered transaction.
-
----
-
-## Key Features
-
-- **Autonomous Root-Cause Diagnosis**: Evaluates complex payment failures (such as PSP timeouts, insufficient balances, and issuer declines) with explainable reasoning.
-- **Deterministic Policy Engine**: Enforces rigid fintech compliance boundaries, ensuring AI recommendations adhere to retry limits and approval thresholds.
-- **Dynamic Razorpay Integration**: Automatically generates live Razorpay payment links for high-friction failures (such as repeated UPI drops), providing customers an instant checkout alternative.
-- **End-to-End Auditability**: Records every state transition, policy evaluation, and recovery action with millisecond timestamps and metadata.
-- **Interactive Sandbox and Demo**: Includes four predefined recovery scenarios and a custom transaction simulator to test arbitrary amounts, payment channels, and failure codes.
-- **Batch Simulation Engine**: Processes batches of 100 failed transactions to benchmark REVA recovery rates against naive retry mechanisms, with downloadable JSON reports.
-
----
-
-## System Architecture
+### System Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -139,6 +96,72 @@ When a customer opens a REVA recovery payment link, the integrated Razorpay Stan
 
 ---
 
+## AI + Policy Governance
+
+In financial technology systems, probabilistic artificial intelligence models must not operate unconstrained. REVA enforces a strict division of responsibility:
+
+- **AI proposes**: Google Gemini 3.6 Flash acts exclusively as a diagnostician, assessing error codes, past transaction success rates, and optimal retry paths.
+- **Policy disposes**: The deterministic policy engine acts as the governing authority, strictly evaluating every proposed action against predefined rules.
+
+### Key Guardrails
+- **Retry Ceiling**: Maximum of 3 retry attempts per transaction. Any further attempt is automatically terminated to prevent card network penalties.
+- **High-Value Threshold**: Any transaction equal to or exceeding INR 50,000 mandates explicit human approval (`REQUIRES_HUMAN_APPROVAL`) before any recovery action is initiated.
+- **Customer Contact Limits**: Direct notifications and alternative payment links are strictly capped to prevent customer harassment.
+- **Non-Recoverable Drops**: Transactions with final decline codes (such as invalid credentials or fraudulent indications) are stopped immediately without retry.
+
+No money-related recovery action is executed without deterministic policy approval.
+
+---
+
+## Recovery Scenarios
+
+REVA includes four interactive recovery scenarios for evaluation:
+
+1. **Temporary Bank Failure**: A transient bank gateway timeout recovered via bounded retry.
+2. **Repeated UPI Failure**: Multiple UPI drops where REVA switches channel and dispatches a Razorpay alternative payment link.
+3. **Low Recovery Opportunity**: Max retries hit or insufficient balance — REVA safely stops recovery to eliminate friction.
+4. **High-Value Transaction**: Amounts ≥ INR 50,000 requiring human operator review before execution.
+
+---
+
+## Razorpay Test Gateway
+
+When high-friction payment failures occur (such as repeated UPI drops), REVA generates a dynamic payment link directing the customer to a secure checkout portal connected to the Razorpay Test Gateway.
+
+![Razorpay Test Gateway](docs/screenshots/razorpay-test-checkout.png)
+
+When opened, the checkout portal launches the Razorpay Standard Checkout SDK in test mode with prefilled customer contact details (`priya.banerjee@reva.test`), enabling seamless order completion via Credit/Debit card, Netbanking, or UPI.
+
+---
+
+## Audit Trail & Explainability
+
+- **Immutable Event Logging**: Every state transition, diagnosis confidence score, policy boundary evaluation, and payment link dispatch is recorded with millisecond timestamps.
+- **Explainable Diagnostics**: Gemini AI outputs clear root-cause explanations alongside confidence ratings and customer-facing recovery messages.
+- **Operator Review**: High-value transactions (≥ INR 50,000) are flagged for human approval before execution, maintaining complete operator oversight.
+
+---
+
+## Screenshots & Demo
+
+### Recovery Dashboard
+![REVA Dashboard](docs/screenshots/dashboard.png)
+The main executive dashboard provides real-time visibility into revenue at risk, recovered revenue, active recovery cases, policy blocks, daily recovery timelines, and failure distributions across card, UPI, and netbanking methods.
+
+### Recovery Case Workflow
+![Recovery Case Details and Workflow](docs/screenshots/recovery-workflow.png)
+The case details view displays the six-stage progression pipeline (`DETECTED → ANALYZED → DECISION → POLICY → ACTION → RESULT`), customer risk profiles, AI root-cause diagnosis, action execution status, and a chronological audit log.
+
+### AI Diagnosis and Policy Decision
+![Live Demo Execution](docs/screenshots/live-demo.png)
+The interactive demo engine demonstrates live transaction execution, highlighting real-time stage transitions, Gemini AI diagnostic reasoning, policy engine validation, and dynamic payment link dispatch.
+
+### Razorpay Test Gateway
+![Razorpay Test Gateway](docs/screenshots/razorpay-test-checkout.png)
+The integrated checkout interface launches Razorpay Standard Checkout in test mode with prefilled contact details, allowing customers to complete dropped payments via alternative payment channels.
+
+---
+
 ## Tech Stack
 
 | Component | Technology | Description |
@@ -156,19 +179,7 @@ When a customer opens a REVA recovery payment link, the integrated Razorpay Stan
 
 ---
 
-## Application Pages and Routes
-
-| Route | Description |
-|---|---|
-| `/` | Revenue recovery dashboard |
-| `/cases` | Recovery case management |
-| `/cases/[id]` | Detailed recovery workflow |
-| `/demo` | Interactive recovery scenarios |
-| `/simulation` | Batch recovery simulation |
-
----
-
-## Getting Started
+## Setup & Prerequisites
 
 REVA includes a zero-configuration fallback mode. You can launch and test the complete application locally without external credentials.
 
@@ -176,25 +187,9 @@ REVA includes a zero-configuration fallback mode. You can launch and test the co
 - Python 3.11 or higher
 - Node.js 18.18 or higher (with npm)
 
-### 1. Start the Backend Server
-```bash
-cd server
-python -m uvicorn app.main:app --reload --port 8000
-```
-- API Documentation (Swagger): http://localhost:8000/docs
-- Health Check: http://localhost:8000/api/health
-
-### 2. Start the Frontend Dashboard
-```bash
-cd dashboard
-npm install
-npm run dev
-```
-- Web Application: http://localhost:3000
-
 ---
 
-## Environment Configuration
+## Environment Variables
 
 Both backend and frontend services provide example configuration files with safe placeholders.
 
@@ -229,21 +224,29 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
-## External Integrations
+## Running the Project
 
-REVA features a dual-mode integration layer:
+### 1. Start the Backend Server
+```bash
+cd server
+python -m uvicorn app.main:app --reload --port 8000
+```
+- API Documentation (Swagger): http://localhost:8000/docs
+- Health Check: http://localhost:8000/api/health
 
-- **Google Gemini AI**: When `GEMINI_API_KEY` is provided, REVA dispatches structured payment failure telemetry to Gemini 3.6 Flash. When absent, an intelligent rule-based heuristic provides realistic diagnostic responses.
-- **Supabase Database**: When `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured, REVA reads and writes directly to PostgreSQL. When absent, it automatically falls back to an in-memory database pre-seeded with 400 realistic Indian transactions.
-- **Razorpay Test Mode**: When `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are provided, REVA generates live test checkout links (`https://rzp.io/...`) using Razorpay's API. When absent, simulated link identifiers are generated.
+### 2. Start the Frontend Dashboard
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+- Web Application: http://localhost:3000
 
 ---
 
 ## Testing
 
-The backend includes a comprehensive automated test suite validating configuration loading, policy boundaries, audit logging, Gemini fallback structures, and Razorpay link generation.
-
-Run the test suite:
+Run the automated test suite:
 ```bash
 cd server
 python -m unittest tests/test_reva_core.py
@@ -251,52 +254,11 @@ python -m unittest tests/test_reva_core.py
 
 ---
 
-## Repository Structure
+## Future Scope
 
-```text
-RazorPay/
-├── dashboard/                 # Next.js 16 frontend application
-│   ├── app/                   # App Router pages and layouts
-│   ├── components/            # Reusable UI components
-│   ├── lib/                   # API clients and utilities
-│   ├── package.json           # Frontend dependencies
-│   ├── .env.example           # Frontend environment template
-│   └── .gitignore             # Frontend Git ignore rules
-├── server/                    # FastAPI backend server
-│   ├── app/                   # API routes, models, and core services
-│   │   ├── api/               # Cases, dashboard, demo, and payment endpoints
-│   │   ├── models/            # Pydantic schemas and response models
-│   │   ├── services/          # Gemini, policy, and recovery services
-│   │   └── main.py            # Server entrypoint
-│   ├── data/                  # Synthetic transactions dataset
-│   ├── tests/                 # Core test suite
-│   ├── requirements.txt       # Python dependencies
-│   ├── .env.example           # Backend environment template
-│   └── .gitignore             # Backend Git ignore rules
-├── supabase/                  # Database definitions
-│   ├── migrations/            # SQL migration scripts
-│   └── seed.sql               # Base database schema
-├── docs/                      # Documentation assets
-│   └── screenshots/           # Application screenshots
-├── .env.example               # Root environment template
-├── .gitignore                 # Root Git exclusion rules
-└── README.md                  # Project documentation
-```
-
----
-
-## Security and Controls
-
-- **Credential Protection**: Real `.env` and `.env.local` files are strictly excluded via `.gitignore`. No private keys or secrets are committed to version control.
-- **Deterministic Bounds**: Probabilistic AI components are restricted from triggering transactions directly; all state changes must pass through the policy engine.
-- **Auditing**: Every decision, status change, and payment link creation is preserved in an immutable audit trail.
-- **Approval Escalation**: Large transactions (>= INR 50,000) are placed on hold until an authorized operator reviews and approves the case.
-
----
-
-## Project Scope
-
-REVA was created as a modern AI payment recovery solution demonstrating autonomous agentic architecture within fintech safety parameters. It demonstrates how autonomous models can deliver revenue recovery without compromising risk management or customer trust.
+- **Webhook Ingestion Pipeline**: Direct real-time webhook listeners for Shopify, Razorpay, and Stripe payment failure webhooks.
+- **Multi-PSP Recovery**: Dynamic routing across multiple payment service providers based on real-time authorization rates.
+- **Reinforcement Learning Policy Tuning**: Adaptive threshold optimization for retry windows based on historical customer response patterns.
 
 ---
 
