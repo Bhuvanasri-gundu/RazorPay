@@ -97,6 +97,43 @@ export default function SimulationPage() {
     URL.revokeObjectURL(url);
   };
 
+  const exportCSV = () => {
+    if (!results || !results.cases || results.cases.length === 0) return;
+
+    const headers = [
+      "Transaction ID",
+      "Amount",
+      "Failure Reason",
+      "REVA Action",
+      "Outcome",
+      "Recovered Amount",
+    ];
+
+    const rows = results.cases.map((c) => [
+      `"${c.transaction_id || ""}"`,
+      c.amount ?? 0,
+      `"${c.failure_reason || ""}"`,
+      `"${c.recommended_action || ""}"`,
+      `"${c.final_status || ""}"`,
+      c.recovered_amount ?? 0,
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `reva_simulation_cases_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const chartData = results ? [
     {
       name: "Recovery Rate",
@@ -270,7 +307,10 @@ export default function SimulationPage() {
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
             <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
               <h3 className="font-semibold text-zinc-200">Sample Processed Cases</h3>
-              <button className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+              <button 
+                onClick={exportCSV}
+                className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer"
+              >
                 <Download className="w-4 h-4" /> Export CSV
               </button>
             </div>
