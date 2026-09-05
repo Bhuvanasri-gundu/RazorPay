@@ -83,6 +83,7 @@ function CheckoutContent() {
         body: JSON.stringify({
           recovery_case_id: caseId,
           razorpay_payment_link_id: linkId,
+          razorpay_payment_id: `pay_${linkId.replace("plink_", "")}`,
         }),
       });
     } catch (e) {

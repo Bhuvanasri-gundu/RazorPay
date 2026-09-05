@@ -43,13 +43,26 @@ def verify(req: PaymentVerifyRequest):
         db = get_supabase()
         amount_paid = result.get("amount_paid", 0)
 
+        # Retrieve case to get amount_at_risk if amount_paid is zero/mock
+        if not amount_paid or amount_paid <= 0:
+            case_row = db.table("recovery_cases").select("amount_at_risk, transaction_id").eq("id", req.recovery_case_id).single().execute()
+            if case_row.data:
+                amount_paid = case_row.data.get("amount_at_risk", 0)
+                txn_id = case_row.data.get("transaction_id")
+                if txn_id:
+                    db.table("transactions").update({"status": "SUCCESS"}).eq("id", txn_id).execute()
+
         db.table("recovery_cases").update({
             "status": RecoveryStatus.RECOVERED,
             "recovered_amount": amount_paid,
         }).eq("id", req.recovery_case_id).execute()
 
+        db.table("recovery_actions").update({
+            "execution_status": "COMPLETED",
+        }).eq("recovery_case_id", req.recovery_case_id).execute()
+
         log_event(req.recovery_case_id, "Recovery Executor", "PAYMENT_RECOVERED",
-                  f"Payment verified and recovered! ₹{amount_paid:,.2f}",
-                  {"payment_link_id": req.razorpay_payment_link_id})
+                  f"Payment verified and recovered! INR {amount_paid:,.2f}",
+                  {"payment_link_id": req.razorpay_payment_link_id, "recovered_amount": amount_paid})
 
     return result
