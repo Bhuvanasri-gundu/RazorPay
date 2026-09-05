@@ -26,9 +26,22 @@ def create_recovery_case(transaction_id: str, customer_id: str, amount: float) -
     return case_data
 
 
+def _get_db_for_case(case_id: str):
+    """Return appropriate db client (Supabase or Mock) containing the case."""
+    try:
+        db = get_supabase()
+        res = db.table("recovery_cases").select("id").eq("id", case_id).execute()
+        if res.data:
+            return db
+    except Exception:
+        pass
+    from app.services.mock_database import get_mock_supabase
+    return get_mock_supabase()
+
+
 def analyze_case(case_id: str) -> dict:
     """Step 2: Use Gemini AI to analyze the failure and recommend recovery action."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     # Fetch case with transaction and customer data
     case = db.table("recovery_cases").select("*").eq("id", case_id).single().execute()
@@ -90,7 +103,7 @@ def analyze_case(case_id: str) -> dict:
 
 def execute_recovery(case_id: str) -> dict:
     """Step 3: Validate through Policy Engine and execute the recovery action."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     # Fetch case
     case = db.table("recovery_cases").select("*").eq("id", case_id).single().execute()
@@ -172,7 +185,7 @@ def execute_recovery(case_id: str) -> dict:
 
 def _execute_retry(case_id: str, case_data: dict, txn_data: dict, cust_data: dict) -> dict:
     """Simulate a retry attempt using deterministic logic."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     log_event(case_id, "Recovery Executor", "RETRY_INITIATED",
               f"Simulating retry attempt (retry #{txn_data.get('retry_count', 0) + 1})")
@@ -246,7 +259,7 @@ def _execute_retry(case_id: str, case_data: dict, txn_data: dict, cust_data: dic
 
 def _execute_payment_link(case_id: str, case_data: dict, txn_data: dict, cust_data: dict) -> dict:
     """Create a Razorpay payment link for recovery."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     log_event(case_id, "Recovery Executor", "PAYMENT_LINK_INITIATED",
               "Creating Razorpay payment link for recovery.")
@@ -254,8 +267,8 @@ def _execute_payment_link(case_id: str, case_data: dict, txn_data: dict, cust_da
     result = create_payment_link(
         case_id=case_id,
         amount=case_data["amount_at_risk"],
-        customer_name=cust_data.get("name", "Customer"),
-        customer_email=cust_data.get("email", ""),
+        customer_name=cust_data.get("name", "Demo User 2"),
+        customer_email=cust_data.get("email", "demo.scenario2@reva.test"),
         description=f"Payment Recovery - INR {case_data['amount_at_risk']:,.2f}",
     )
 
@@ -289,7 +302,7 @@ def _execute_payment_link(case_id: str, case_data: dict, txn_data: dict, cust_da
 
 def _execute_alternative_method(case_id: str, case_data: dict, txn_data: dict, cust_data: dict) -> dict:
     """Recommend an alternative payment method, optionally with a payment link."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     method = txn_data.get("payment_method", "UPI")
     alternatives = {"UPI": "Card or Netbanking", "CARD": "UPI or Netbanking",
@@ -306,8 +319,8 @@ def _execute_alternative_method(case_id: str, case_data: dict, txn_data: dict, c
     result = create_payment_link(
         case_id=case_id,
         amount=case_data["amount_at_risk"],
-        customer_name=cust_data.get("name", "Customer"),
-        customer_email=cust_data.get("email", ""),
+        customer_name=cust_data.get("name", "Demo User 2"),
+        customer_email=cust_data.get("email", "demo.scenario2@reva.test"),
         description=f"Payment Recovery - Try {alt_text}",
     )
 
@@ -334,7 +347,7 @@ def _execute_alternative_method(case_id: str, case_data: dict, txn_data: dict, c
 
 def _execute_stop(case_id: str, case_data: dict) -> dict:
     """Stop recovery — no further action."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     db.table("recovery_actions").insert({
         "recovery_case_id": case_id,
@@ -355,7 +368,7 @@ def _execute_stop(case_id: str, case_data: dict) -> dict:
 
 def _execute_escalate(case_id: str, case_data: dict) -> dict:
     """Escalate to manual review."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     db.table("recovery_actions").insert({
         "recovery_case_id": case_id,
@@ -376,7 +389,7 @@ def _execute_escalate(case_id: str, case_data: dict) -> dict:
 
 def approve_case(case_id: str) -> dict:
     """Human approval for high-value cases."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     case = db.table("recovery_cases").select("*").eq("id", case_id).single().execute()
     case_data = case.data
@@ -419,7 +432,7 @@ def approve_case(case_id: str) -> dict:
 
 def get_case_details(case_id: str) -> dict:
     """Get full case details including transaction, customer, actions, and audit trail."""
-    db = get_supabase()
+    db = _get_db_for_case(case_id)
 
     case = db.table("recovery_cases").select("*").eq("id", case_id).single().execute()
     case_data = case.data

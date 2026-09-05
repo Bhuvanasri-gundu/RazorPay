@@ -22,7 +22,9 @@ function CheckoutContent() {
   const caseId = searchParams.get("case_id") || "demo-case";
   const amountStr = searchParams.get("amount") || "4999";
   const linkId = searchParams.get("link_id") || "plink_demo";
-  const customerName = searchParams.get("name") || "Priya Banerjee";
+  const customerName = searchParams.get("name") || "Demo User 2";
+  const customerEmail = searchParams.get("email") || "demo.scenario2@reva.test";
+  const customerContact = searchParams.get("contact") || searchParams.get("phone") || "9999900002";
   const amount = parseFloat(amountStr) || 4999;
 
   const [paymentMethod, setPaymentMethod] = useState<"card" | "upi" | "netbanking">("card");
@@ -48,8 +50,8 @@ function CheckoutContent() {
           image: "https://razorpay.com/favicon.ico",
           prefill: {
             name: customerName,
-            email: "priya.banerjee@reva.test",
-            contact: "9876543210",
+            email: customerEmail,
+            contact: customerContact,
           },
           theme: {
             color: "#10b981",
@@ -138,7 +140,7 @@ function CheckoutContent() {
                 <div className="text-3xl font-extrabold text-zinc-100 tracking-tight mt-0.5">
                   {formattedAmount}
                 </div>
-                <p className="text-xs text-zinc-400 mt-1">Customer: <strong className="text-zinc-200">{customerName}</strong></p>
+                <p className="text-xs text-zinc-400 mt-1">Customer: <strong className="text-zinc-200">{customerName}</strong> (<span className="text-zinc-300">{customerEmail}</span>)</p>
               </div>
               <div className="text-right">
                 <span className="text-xs text-zinc-500">Case Reference</span>

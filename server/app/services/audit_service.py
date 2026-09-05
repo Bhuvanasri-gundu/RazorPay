@@ -46,6 +46,7 @@ def log_event(
 
 def get_case_audit_trail(case_id: str) -> list[dict]:
     """Get all audit logs for a recovery case, chronologically."""
+    logs = []
     try:
         db = get_supabase()
         result = (
@@ -55,10 +56,29 @@ def get_case_audit_trail(case_id: str) -> list[dict]:
             .order("created_at", desc=False)
             .execute()
         )
-        return result.data or []
+        logs = result.data or []
     except Exception as e:
         logger.warning(f"Could not retrieve audit logs from Supabase: {e}")
-        return [r for r in _local_audit_buffer if r.get("recovery_case_id") == case_id]
+
+    if not logs:
+        try:
+            from app.services.mock_database import get_mock_supabase
+            mock_db = get_mock_supabase()
+            mock_res = (
+                mock_db.table("audit_logs")
+                .select("*")
+                .eq("recovery_case_id", case_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            logs = mock_res.data or []
+        except Exception:
+            pass
+
+    if not logs:
+        logs = [r for r in _local_audit_buffer if r.get("recovery_case_id") == case_id]
+
+    return logs
 
 
 # Convenient alias

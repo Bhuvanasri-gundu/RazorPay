@@ -75,16 +75,25 @@ def create_payment_link(
                       "Razorpay test API limit reached / unavailable. Generated simulated recovery payment link.",
                       {"fallback": True, "error": "rate_limit_or_timeout"})
             # Fallback to simulated link on API error
-            return _generate_mock_link(case_id, amount, description)
+            return _generate_mock_link(case_id, amount, description, customer_name, customer_email)
 
     # MOCK MODE
-    return _generate_mock_link(case_id, amount, description)
+    return _generate_mock_link(case_id, amount, description, customer_name, customer_email)
 
 
-def _generate_mock_link(case_id: str, amount: float, description: str) -> dict:
+def _generate_mock_link(
+    case_id: str,
+    amount: float,
+    description: str,
+    customer_name: str = "Demo User 2",
+    customer_email: str = "demo.scenario2@reva.test",
+) -> dict:
     """Generate interactive test payment recovery checkout link."""
+    import urllib.parse
     link_id = f"plink_mock_{uuid.uuid4().hex[:12]}"
-    short_url = f"http://localhost:3000/checkout?case_id={case_id}&amount={amount}&link_id={link_id}"
+    encoded_name = urllib.parse.quote(customer_name)
+    encoded_email = urllib.parse.quote(customer_email)
+    short_url = f"http://localhost:3000/checkout?case_id={case_id}&amount={amount}&link_id={link_id}&name={encoded_name}&email={encoded_email}"
 
     log_event(
         case_id,

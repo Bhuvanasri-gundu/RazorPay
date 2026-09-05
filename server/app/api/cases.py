@@ -49,32 +49,59 @@ def list_cases(
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ):
-    """List recovery cases with optional filtering."""
+    """List recovery cases with optional filtering, preserving live Supabase data alongside the mock dataset."""
     try:
         if hasattr(limit, "default"):
             limit = limit.default
-        db = get_supabase()
 
-        query = db.table("recovery_cases").select(
-            "*, transactions!inner(amount, payment_method, failure_reason, status, retry_count), "
-            "customers!inner(name, email, previous_success_rate)"
-        )
+        cases = []
+        try:
+            db = get_supabase()
+            query = db.table("recovery_cases").select(
+                "*, transactions!inner(amount, payment_method, failure_reason, status, retry_count), "
+                "customers!inner(name, email, previous_success_rate)"
+            )
+            if status:
+                query = query.eq("status", status)
+            if action:
+                query = query.eq("ai_recommendation", action)
 
-        if status:
-            query = query.eq("status", status)
-        if action:
-            query = query.eq("ai_recommendation", action)
+            query = query.order("created_at", desc=True)
+            result = query.execute()
+            cases = result.data or []
+        except Exception:
+            cases = []
 
-        query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
-        result = query.execute()
+        # Merge mock recovery cases so both live Supabase cases and mock dataset are available
+        try:
+            from app.services.mock_database import get_mock_supabase
+            mock_db = get_mock_supabase()
+            mock_query = mock_db.table("recovery_cases").select(
+                "*, transactions!inner(amount, payment_method, failure_reason, status, retry_count), "
+                "customers!inner(name, email, previous_success_rate)"
+            )
+            if status:
+                mock_query = mock_query.eq("status", status)
+            if action:
+                mock_query = mock_query.eq("ai_recommendation", action)
+            mock_result = mock_query.execute()
+            mock_cases = mock_result.data or []
 
-        cases = result.data or []
+            real_ids = {c["id"] for c in cases}
+            for mc in mock_cases:
+                if mc["id"] not in real_ids:
+                    cases.append(mc)
+        except Exception:
+            pass
 
         # Filter by failure_reason at application level (it's in the joined table)
         if failure_reason:
             cases = [c for c in cases if c.get("transactions", {}).get("failure_reason") == failure_reason]
 
-        return {"cases": cases, "count": len(cases)}
+        total_count = len(cases)
+        paged_cases = cases[offset : offset + limit]
+
+        return {"cases": paged_cases, "count": total_count}
     except Exception as e:
         return {"cases": [], "count": 0}
 
