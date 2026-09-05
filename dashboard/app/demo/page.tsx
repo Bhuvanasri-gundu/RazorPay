@@ -38,6 +38,7 @@ interface RunScenarioResponse {
   case_id: string;
   steps: Step[];
   final_status: string;
+  error?: string;
 }
 
 type StageStatus = "WAITING" | "PROCESSING" | "COMPLETED" | "BLOCKED" | "FAILED";
@@ -121,7 +122,7 @@ export default function DemoPage() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const res = await fetch(`${API_BASE}/api/demo/run-scenario`, {
         method: "POST",
@@ -164,7 +165,7 @@ export default function DemoPage() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const res = await fetch(`${API_BASE}/api/demo/run-custom-scenario`, {
         method: "POST",

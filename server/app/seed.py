@@ -3,7 +3,7 @@
 import random
 import uuid
 from datetime import datetime, timedelta
-from app.database.supabase_client import get_supabase
+from app.services.supabase_service import get_supabase
 
 # Indian first and last names
 FIRST_NAMES = [

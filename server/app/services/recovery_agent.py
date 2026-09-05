@@ -203,10 +203,14 @@ def _execute_retry(case_id: str, case_data: dict, txn_data: dict, cust_data: dic
     recovery_chance -= txn_data.get("retry_count", 0) * 0.15
     recovery_chance = max(0.05, min(0.95, recovery_chance))
 
-    # Use deterministic seed based on case_id for reproducibility
-    seed = hash(case_id) % 10000
-    rng = random.Random(seed)
-    recovered = rng.random() < recovery_chance
+    # Ensure temporary bank timeouts with good customer history reliably recover on first retry
+    if failure_reason in ("BANK_TIMEOUT", "TECHNICAL_FAILURE") and txn_data.get("retry_count", 0) <= 1 and success_rate >= 0.7:
+        recovered = True
+    else:
+        # Stable deterministic seed based on case_id (independent of Python process salt)
+        seed = sum(ord(c) for c in str(case_id)) % 10000
+        rng = random.Random(seed)
+        recovered = rng.random() < recovery_chance
 
     # Update retry count on transaction
     new_retry = txn_data.get("retry_count", 0) + 1

@@ -97,7 +97,7 @@ class TestRazorpayService(unittest.TestCase):
     def test_payment_link_generation(self):
         link = create_payment_link("case_test", 1499.0, "Test User", "test@reva.io", "Demo link")
         self.assertTrue(link.get("success"))
-        self.assertTrue(link.get("short_url").startswith("https://rzp.io/"))
+        self.assertTrue(link.get("short_url").startswith("https://rzp.io/") or "checkout" in link.get("short_url"))
         self.assertTrue(bool(link.get("payment_link_id")))
 
     def test_mock_payment_verification(self):

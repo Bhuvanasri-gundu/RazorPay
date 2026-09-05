@@ -91,7 +91,7 @@ def analyze_payment(
                     response_mime_type="application/json",
                 ),
             )
-            response = future.result(timeout=2.0)
+            response = future.result(timeout=12.0)
         raw = response.text.strip()
 
         # Clean possible markdown fences if returned
@@ -145,7 +145,7 @@ def analyze_payment(
 
     except concurrent.futures.TimeoutError:
         log_event(case_id, "Gemini AI", "TIMEOUT",
-                  f"Gemini API response timed out (>2.0s). Transitioned to deterministic AI heuristic engine.",
+                  f"Gemini API response timed out (>12.0s). Transitioned to deterministic AI heuristic engine.",
                   {"model": model_name, "fallback": True})
     except json.JSONDecodeError:
         log_event(case_id, "Gemini AI", "PARSE_ERROR",

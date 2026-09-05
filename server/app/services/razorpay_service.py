@@ -56,7 +56,7 @@ def create_payment_link(
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(client.payment_link.create, payload)
-                result = future.result(timeout=2.0)
+                result = future.result(timeout=5.0)
 
             log_event(case_id, "Razorpay", "PAYMENT_LINK_CREATED",
                       f"Razorpay payment link created: {result.get('short_url', 'N/A')}",
